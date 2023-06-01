@@ -65,7 +65,8 @@ static int pack_metric_metadata(struct cmt_prometheus_remote_write_context *cont
                                 struct cmt_map *map,
                                 struct cmt_metric *metric);
 
-static int append_metric_to_timeseries(struct cmt_prometheus_time_series *time_series,
+static int append_metric_to_timeseries(struct cmt_prometheus_remote_write_context *context,
+                                       struct cmt_prometheus_time_series *time_series,
                                        struct cmt_metric *metric);
 
 static int pack_basic_type(struct cmt_prometheus_remote_write_context *context,
@@ -594,11 +595,18 @@ int pack_metric_metadata(struct cmt_prometheus_remote_write_context *context,
     return 0;
 }
 
-int append_metric_to_timeseries(struct cmt_prometheus_time_series *time_series,
+int append_metric_to_timeseries(struct cmt_prometheus_remote_write_context *context,
+                                struct cmt_prometheus_time_series *time_series,
                                 struct cmt_metric *metric)
 {
     uint64_t ts;
     Prometheus__Sample *sample;
+
+    ts = cmt_metric_get_timestamp(metric);
+    if (ts < context->oldest_valid_timestamp_in_ns) {
+        /* Silently omit excessively stale metrics from time_series->data.samples */
+        return CMT_ENCODE_PROMETHEUS_REMOTE_WRITE_SUCCESS;
+    }
 
     sample = calloc(1, sizeof(Prometheus__Sample));
 
@@ -612,7 +620,6 @@ int append_metric_to_timeseries(struct cmt_prometheus_time_series *time_series,
 
     sample->value = cmt_metric_get_value(metric);
 
-    ts = cmt_metric_get_timestamp(metric);
     sample->timestamp = ts / 1000000;
     time_series->data.samples[time_series->entries_set++] = sample;
 
@@ -641,7 +648,7 @@ int pack_basic_metric_sample(struct cmt_prometheus_remote_write_context *context
         }
     }
 
-    return append_metric_to_timeseries(time_series, metric);
+    return append_metric_to_timeseries(context, time_series, metric);
 }
 
 int pack_basic_type(struct cmt_prometheus_remote_write_context *context,
@@ -749,7 +756,7 @@ int pack_complex_metric_sample(struct cmt_prometheus_remote_write_context *conte
             }
 
             if (result == CMT_ENCODE_PROMETHEUS_REMOTE_WRITE_SUCCESS) {
-                result = append_metric_to_timeseries(time_series, &dummy_metric);
+                result = append_metric_to_timeseries(context, time_series, &dummy_metric);
             }
         }
 
@@ -775,7 +782,7 @@ int pack_complex_metric_sample(struct cmt_prometheus_remote_write_context *conte
                 }
 
                 if (result == CMT_ENCODE_PROMETHEUS_REMOTE_WRITE_SUCCESS) {
-                    result = append_metric_to_timeseries(time_series, &dummy_metric);
+                    result = append_metric_to_timeseries(context, time_series, &dummy_metric);
                 }
             }
 
@@ -830,7 +837,7 @@ int pack_complex_metric_sample(struct cmt_prometheus_remote_write_context *conte
                             }
 
                             if (result == CMT_ENCODE_PROMETHEUS_REMOTE_WRITE_SUCCESS) {
-                                result = append_metric_to_timeseries(time_series, &dummy_metric);
+                                result = append_metric_to_timeseries(context, time_series, &dummy_metric);
                             }
                         }
                     }
@@ -863,7 +870,7 @@ int pack_complex_metric_sample(struct cmt_prometheus_remote_write_context *conte
             }
 
             if (result == CMT_ENCODE_PROMETHEUS_REMOTE_WRITE_SUCCESS) {
-                result = append_metric_to_timeseries(time_series, &dummy_metric);
+                result = append_metric_to_timeseries(context, time_series, &dummy_metric);
             }
         }
 
@@ -890,7 +897,7 @@ int pack_complex_metric_sample(struct cmt_prometheus_remote_write_context *conte
                 }
 
                 if (result == CMT_ENCODE_PROMETHEUS_REMOTE_WRITE_SUCCESS) {
-                    result = append_metric_to_timeseries(time_series, &dummy_metric);
+                    result = append_metric_to_timeseries(context, time_series, &dummy_metric);
                 }
             }
 
@@ -953,7 +960,7 @@ int pack_complex_metric_sample(struct cmt_prometheus_remote_write_context *conte
                         }
 
                         if (result == CMT_ENCODE_PROMETHEUS_REMOTE_WRITE_SUCCESS) {
-                            result = append_metric_to_timeseries(time_series, &dummy_metric);
+                            result = append_metric_to_timeseries(context, time_series, &dummy_metric);
                         }
                     }
                 }
@@ -1038,7 +1045,7 @@ int pack_complex_type(struct cmt_prometheus_remote_write_context *context,
 }
 
 /* Format all the registered metrics in Prometheus Text format */
-cfl_sds_t cmt_encode_prometheus_remote_write_create(struct cmt *cmt)
+cfl_sds_t cmt_encode_prometheus_remote_write_create(struct cmt *cmt, uint64_t oldest_valid_timestamp_in_ns)
 {
     struct cmt_histogram                      *histogram;
     struct cmt_prometheus_remote_write_context context;
@@ -1061,6 +1068,8 @@ cfl_sds_t cmt_encode_prometheus_remote_write_create(struct cmt *cmt)
 
     cfl_list_init(&context.time_series_entries);
     cfl_list_init(&context.metadata_entries);
+
+    context.oldest_valid_timestamp_in_ns = oldest_valid_timestamp_in_ns;
 
     /* Counters */
     cfl_list_foreach(head, &cmt->counters) {

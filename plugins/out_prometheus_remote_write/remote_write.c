@@ -22,6 +22,7 @@
 #include <fluent-bit/flb_gzip.h>
 #include <fluent-bit/flb_metrics.h>
 #include <fluent-bit/flb_kv.h>
+#include <fluent-bit/flb_time.h>
 
 #ifdef FLB_HAVE_SIGNV4
 #ifdef FLB_HAVE_AWS
@@ -307,7 +308,17 @@ static void cb_prom_flush(struct flb_event_chunk *event_chunk,
         append_labels(ctx, cmt);
 
         /* Create a Prometheus Remote Write payload */
-        encoded_chunk = cmt_encode_prometheus_remote_write_create(cmt);
+        {
+            struct flb_time   remote_write_time;
+            uint64_t          oldest_valid_timestamp_in_ns;
+
+            flb_time_get(&remote_write_time);
+            oldest_valid_timestamp_in_ns = flb_time_to_nanosec(&remote_write_time);
+            /* hardcode 4 minute oldest valid time */
+            oldest_valid_timestamp_in_ns -= 240L*1000*1000*1000;
+
+            encoded_chunk = cmt_encode_prometheus_remote_write_create(cmt, oldest_valid_timestamp_in_ns);
+        }
         if (encoded_chunk == NULL) {
             flb_plg_error(ctx->ins,
                           "Error encoding context as prometheus remote write");

@@ -48,7 +48,7 @@ int cmt_test_encode_all(struct cmt *cmt)
     cmt_encode_prometheus_destroy(sds_buf);
 
     /* prometheus remote write */
-    sds_buf = cmt_encode_prometheus_remote_write_create(cmt);
+    sds_buf = cmt_encode_prometheus_remote_write_create(cmt, 0);
     cmt_encode_prometheus_remote_write_destroy(sds_buf);
 
     /* msgpack */

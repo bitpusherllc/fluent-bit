@@ -51,9 +51,10 @@ struct cmt_prometheus_remote_write_context
     uint64_t                 sequence_number;
     Prometheus__WriteRequest write_request;
     struct cmt              *cmt;
+    uint64_t                 oldest_valid_timestamp_in_ns;
 };
 
-cfl_sds_t cmt_encode_prometheus_remote_write_create(struct cmt *cmt);
+cfl_sds_t cmt_encode_prometheus_remote_write_create(struct cmt *cmt, uint64_t oldest_valid_timestamp_in_ns);
 void cmt_encode_prometheus_remote_write_destroy(cfl_sds_t text);
 
 #endif

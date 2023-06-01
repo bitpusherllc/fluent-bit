@@ -515,7 +515,7 @@ void test_prometheus_remote_write()
 
     cmt = generate_encoder_test_data();
 
-    payload = cmt_encode_prometheus_remote_write_create(cmt);
+    payload = cmt_encode_prometheus_remote_write_create(cmt, 0);
     TEST_CHECK(NULL != payload);
 
     if (payload == NULL) {
